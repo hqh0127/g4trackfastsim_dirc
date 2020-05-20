@@ -475,7 +475,10 @@ void PHG4TrackFastSimEval::fill_dirc_tree(PHCompositeNode *topNode)
     if (track)
     {
       //std::cout << "C1" << std::endl;
-      SvtxTrackState* state = nullptr;
+      SvtxTrackState* state_final = nullptr;
+      SvtxTrackState* state[2];
+      state[0] = nullptr;
+      state[1] = nullptr;
       for (SvtxTrack::ConstStateIter state_iter = track->begin_states();
            state_iter != track->end_states();
            ++state_iter)
@@ -483,57 +486,81 @@ void PHG4TrackFastSimEval::fill_dirc_tree(PHCompositeNode *topNode)
         SvtxTrackState* temp_state = state_iter->second;
         if (!temp_state) continue;
         if (temp_state->get_name() == "DIRC")
-          state = temp_state;
+          state[0] = temp_state;
+        else if (temp_state->get_name() == "DIRCinv")
+          state[1] = temp_state;
       }
-      if (!state) continue;
+      if (!(state[0] && state[1])) continue;
 
-      PHG4Hit* hit = nullptr;
-      dca_dirc = -1;
+      PHG4Hit* hit_final = nullptr;
+      PHG4Hit* hit[2];
+      hit[0] = nullptr;
+      hit[1] = nullptr;
+      float dca_dirc0[2];
+      dca_dirc0[0] = -1;
+      dca_dirc0[1] = -1;
       PHG4HitContainer::ConstRange hit_range = _dirc_hits->getHits();
-      for (PHG4HitContainer::ConstIterator hit_iter = hit_range.first; hit_iter != hit_range.second; hit_iter++)
-      {
-        PHG4Hit* temp_hit = hit_iter->second;
-        if (!temp_hit)
+      for (int kk = 0; kk < 2; kk++) {
+        for (PHG4HitContainer::ConstIterator hit_iter = hit_range.first; hit_iter != hit_range.second; hit_iter++)
         {
-          LogDebug("");
-          continue;
-        }
-        if ((temp_hit->get_trkid() - g4particle->get_track_id()) == 0)
-        {
-          float ghx_dirc_tmp = temp_hit->get_avg_x();
-          float ghy_dirc_tmp = temp_hit->get_avg_y();
-          float ghz_dirc_tmp = temp_hit->get_avg_z();
+          PHG4Hit* temp_hit = hit_iter->second;
+          if (!temp_hit)
+          {
+            LogDebug("");
+            continue;
+          }
+          if ((temp_hit->get_trkid() - g4particle->get_track_id()) == 0)
+          {
+            float ghx_dirc_tmp = temp_hit->get_avg_x();
+            float ghy_dirc_tmp = temp_hit->get_avg_y();
+            //float ghz_dirc_tmp = temp_hit->get_avg_z();
 
-          float phx_dirc_tmp = state->get_x();
-          float phy_dirc_tmp = state->get_y();
-          float phz_dirc_tmp = state->get_z();
-          
-          float dca_dirc_tmp = (ghx_dirc_tmp -phx_dirc_tmp )*(ghx_dirc_tmp -phx_dirc_tmp ) + (ghy_dirc_tmp -phy_dirc_tmp )*(ghy_dirc_tmp -phy_dirc_tmp ) + (ghz_dirc_tmp -phz_dirc_tmp )*(ghz_dirc_tmp -phz_dirc_tmp );
-          if ((dca_dirc < 0) || (dca_dirc_tmp < dca_dirc)){
-            dca_dirc = dca_dirc_tmp;
-            hit = temp_hit;
+            float phx_dirc_tmp = state[kk]->get_x();
+            float phy_dirc_tmp = state[kk]->get_y();
+            //float phz_dirc_tmp = state[kk]->get_z();
+
+            //float dca_dirc_tmp = (ghx_dirc_tmp -phx_dirc_tmp )*(ghx_dirc_tmp -phx_dirc_tmp ) + (ghy_dirc_tmp -phy_dirc_tmp )*(ghy_dirc_tmp -phy_dirc_tmp ) + (ghz_dirc_tmp -phz_dirc_tmp )*(ghz_dirc_tmp -phz_dirc_tmp );
+            float dca_dirc_tmp = (ghx_dirc_tmp -phx_dirc_tmp )*(ghx_dirc_tmp -phx_dirc_tmp ) + (ghy_dirc_tmp -phy_dirc_tmp )*(ghy_dirc_tmp -phy_dirc_tmp );
+            if ((dca_dirc0[kk] < 0) || (dca_dirc_tmp < dca_dirc0[kk])){
+              dca_dirc0[kk] = dca_dirc_tmp;
+              hit[kk] = temp_hit;
+            }
           }
         }
       }
-      if ( hit && state ) {
-        gpx_dirc = hit->get_px(0);
-        gpy_dirc = hit->get_py(0);
-        gpz_dirc = hit->get_pz(0);
-        ghx_dirc = hit->get_avg_x();
-        ghy_dirc = hit->get_avg_y();
-        ghz_dirc = hit->get_avg_z();
-        ght_dirc = hit->get_avg_t();
+      if ( (dca_dirc0[0]<0) || (dca_dirc0[1]<0) || (!hit[0]) || (!hit[1])) continue;
+      //cout << TMath::Sqrt(dca_dirc0[0]) << " " << TMath::Sqrt(dca_dirc0[1]) << endl;
+      //for (int kk=0;kk<2;kk++)
+      //cout << "state " << state[kk]->get_name() << " "  << state[kk]->get_x() << " " << state[kk]->get_y() << endl;
+      if (dca_dirc0[0] < dca_dirc0[1]){
+        state_final = state[0];
+        hit_final = hit[0];
+        dca_dirc = dca_dirc0[0];
+      }
+      else{
+        state_final = state[1];
+        hit_final = hit[1];
+        dca_dirc = dca_dirc0[1];
+      }
+      if ( hit_final && state_final ) {
+        gpx_dirc = hit_final->get_px(0);
+        gpy_dirc = hit_final->get_py(0);
+        gpz_dirc = hit_final->get_pz(0);
+        ghx_dirc = hit_final->get_avg_x();
+        ghy_dirc = hit_final->get_avg_y();
+        ghz_dirc = hit_final->get_avg_z();
+        ght_dirc = hit_final->get_avg_t();
 
         trackID = track->get_id();
         charge = track->get_charge();
         nhits = track->size_clusters();
 
-        px_dirc = state->get_px();
-        py_dirc = state->get_py();
-        pz_dirc = state->get_pz();
-        phx_dirc = state->get_x();
-        phy_dirc = state->get_y();
-        phz_dirc = state->get_z();
+        px_dirc =  state_final->get_px();
+        py_dirc =  state_final->get_py();
+        pz_dirc =  state_final->get_pz();
+        phx_dirc = state_final->get_x();
+        phy_dirc = state_final->get_y();
+        phz_dirc = state_final->get_z();
 
         dca_dirc = TMath::Sqrt(dca_dirc);
 

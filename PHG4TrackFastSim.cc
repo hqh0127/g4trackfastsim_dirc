@@ -199,7 +199,7 @@ int PHG4TrackFastSim::InitRun(PHCompositeNode* topNode)
         return Fun4AllReturnCodes::ABORTEVENT;
       }
     }
-    else if (_state_names[i] == "DIRC") {
+    else if ( (_state_names[i] == "DIRC") || (_state_names[i] == "DIRCinv") ) {
       _state_location.push_back(81.5); // DIRC inner surface 81.71 cm
     }
     else
@@ -895,7 +895,13 @@ SvtxTrack* PHG4TrackFastSim::MakeSvtxTrack(const PHGenFit::Track* phgf_track,
     {
       // Project to a cylinder at fixed r
       pathlenth_from_first_meas = phgf_track->extrapolateToCylinder(*gf_state, _state_location[i], TVector3(0., 0., 0.),
-                                                                    TVector3(0., 0., 1.), 0);
+                                                                    TVector3(0., 0., 1.), 0, 1);
+    }
+    else if ( _state_names[i] == "DIRCinv" )
+    {
+      // Project to a cylinder at fixed r
+      pathlenth_from_first_meas = phgf_track->extrapolateToCylinder(*gf_state, _state_location[i], TVector3(0., 0., 0.),
+                                                                    TVector3(0., 0., 1.), 1, -1); // change tr_point_id from 0 to 1 to avoid overwrite state map
     }
     else
     {
