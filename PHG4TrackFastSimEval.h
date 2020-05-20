@@ -20,6 +20,7 @@ class SvtxTrackMap;
 class SvtxVertexMap;
 class TTree;
 class TH2D;
+class PHG4HitContainer;
 
 //Brief: basic ntuple and histogram creation for sim evaluation
 class PHG4TrackFastSimEval : public SubsysReco
@@ -68,6 +69,7 @@ class PHG4TrackFastSimEval : public SubsysReco
  private:
   void fill_track_tree(PHCompositeNode*);
   void fill_vertex_tree(PHCompositeNode*);
+  void fill_dirc_tree(PHCompositeNode*);
 
   //output filename
   std::string _outfile_name;
@@ -87,6 +89,7 @@ class PHG4TrackFastSimEval : public SubsysReco
   //TTrees
   TTree* _eval_tree_tracks;
   TTree* _eval_tree_vertex;
+  TTree* _eval_tree_dirc;
   int event;
   //-- truth
   int gtrackID;
@@ -99,6 +102,14 @@ class PHG4TrackFastSimEval : public SubsysReco
   float gvz;
   float gvt;
 
+  float gpx_dirc;
+  float gpy_dirc;
+  float gpz_dirc;
+  float ghx_dirc;
+  float ghy_dirc;
+  float ghz_dirc;
+  float ght_dirc;
+
   //-- reco
   int trackID;
   int charge;
@@ -110,6 +121,14 @@ class PHG4TrackFastSimEval : public SubsysReco
   float pcay;
   float pcaz;
   float dca2d;
+
+  float px_dirc;
+  float py_dirc;
+  float pz_dirc;
+  float phx_dirc;
+  float phy_dirc;
+  float phz_dirc;
+  float dca_dirc;
 
   //vertex
   float vx;
@@ -129,6 +148,7 @@ class PHG4TrackFastSimEval : public SubsysReco
   PHG4TruthInfoContainer* _truth_container;
   SvtxTrackMap* _trackmap;
   SvtxVertexMap* _vertexmap;
+  PHG4HitContainer* _dirc_hits;
 };
 
 #endif  //* __PHG4TrackFastSimEval_H__ *//

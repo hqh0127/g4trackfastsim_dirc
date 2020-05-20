@@ -1,4 +1,4 @@
-AC_INIT(g4trackfastsim, [1.00])
+AC_INIT(g4trackfastsim_dirc, [1.00])
 AC_CONFIG_SRCDIR([configure.ac])
 
 AM_INIT_AUTOMAKE

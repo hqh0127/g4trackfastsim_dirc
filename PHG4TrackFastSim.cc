@@ -199,6 +199,9 @@ int PHG4TrackFastSim::InitRun(PHCompositeNode* topNode)
         return Fun4AllReturnCodes::ABORTEVENT;
       }
     }
+    else if (_state_names[i] == "DIRC") {
+      _state_location.push_back(81.5); // DIRC inner surface 81.71 cm
+    }
     else
     {
       cerr << PHWHERE << " ERROR: Unrecognized detector name for state projection:  " << _state_names[i] << endl;
@@ -888,7 +891,7 @@ SvtxTrack* PHG4TrackFastSim::MakeSvtxTrack(const PHGenFit::Track* phgf_track,
       pathlenth_from_first_meas = phgf_track->extrapolateToPlane(*gf_state, TVector3(0., 0., _state_location[i]),
                                                                  TVector3(1., 0., _state_location[i]), 0);
     }
-    else if ((_state_names[i] == "CEMC") || (_state_names[i] == "IHCAL") || (_state_names[i] == "OHCAL"))
+    else if ((_state_names[i] == "CEMC") || (_state_names[i] == "IHCAL") || (_state_names[i] == "OHCAL") || (_state_names[i] == "DIRC"))
     {
       // Project to a cylinder at fixed r
       pathlenth_from_first_meas = phgf_track->extrapolateToCylinder(*gf_state, _state_location[i], TVector3(0., 0., 0.),
@@ -911,7 +914,7 @@ SvtxTrack* PHG4TrackFastSim::MakeSvtxTrack(const PHGenFit::Track* phgf_track,
     state->set_px(gf_state->getMom().x());
     state->set_py(gf_state->getMom().y());
     state->set_pz(gf_state->getMom().z());
-
+    
     state->set_name(_state_names[i]);
 
     for (int i = 0; i < 6; i++)

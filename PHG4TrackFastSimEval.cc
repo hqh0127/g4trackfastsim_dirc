@@ -9,6 +9,7 @@
 
 #include <trackbase_historic/SvtxTrack.h>
 #include <trackbase_historic/SvtxTrackMap.h>
+#include <trackbase_historic/SvtxTrackState.h>
 #include <trackbase_historic/SvtxTrack_FastSim.h>
 #include <trackbase_historic/SvtxVertex.h>         // for SvtxVertex
 #include <trackbase_historic/SvtxVertexMap.h>
@@ -16,6 +17,10 @@
 #include <g4main/PHG4Particle.h>
 #include <g4main/PHG4TruthInfoContainer.h>
 #include <g4main/PHG4VtxPoint.h>
+
+#include <g4main/PHG4Hit.h>
+#include <g4main/PHG4Hitv1.h>
+#include <g4main/PHG4HitContainer.h>
 
 #include <fun4all/Fun4AllReturnCodes.h>
 #include <fun4all/PHTFileServer.h>
@@ -27,6 +32,7 @@
 #include <TH2.h>
 #include <TTree.h>
 #include <TVector3.h>
+#include <TMath.h>
 
 #include <cassert>
 #include <cmath>
@@ -119,6 +125,29 @@ int PHG4TrackFastSimEval::Init(PHCompositeNode *topNode)
   _eval_tree_vertex->Branch("ntracks", &ntracks, "ntracks/I");
   _eval_tree_vertex->Branch("n_from_truth", &n_from_truth, "n_from_truth/I");
 
+  // create TTree at DIRC
+  _eval_tree_dirc = new TTree("dirc", "FastSim Eval => dirc");
+  _eval_tree_dirc->Branch("event", &event, "event/I");
+  _eval_tree_dirc->Branch("gtrackID", &gtrackID, "gtrackID/I");
+  _eval_tree_dirc->Branch("gflavor", &gflavor, "gflavor/I");
+  _eval_tree_dirc->Branch("gpx", &gpx_dirc, "gpx/F");
+  _eval_tree_dirc->Branch("gpy", &gpy_dirc, "gpy/F");
+  _eval_tree_dirc->Branch("gpz", &gpz_dirc, "gpz/F");
+  _eval_tree_dirc->Branch("ghx", &ghx_dirc, "ghx/F");
+  _eval_tree_dirc->Branch("ghy", &ghy_dirc, "ghy/F");
+  _eval_tree_dirc->Branch("ghz", &ghz_dirc, "ghz/F");
+  _eval_tree_dirc->Branch("ght", &ght_dirc, "ght/F");
+  _eval_tree_dirc->Branch("trackID", &trackID, "trackID/I");
+  _eval_tree_dirc->Branch("charge", &charge, "charge/I");
+  _eval_tree_dirc->Branch("nhits", &nhits, "nhits/I");
+  _eval_tree_dirc->Branch("px", &px_dirc, "px/F");
+  _eval_tree_dirc->Branch("py", &py_dirc, "py/F");
+  _eval_tree_dirc->Branch("pz", &pz_dirc, "pz/F");
+  _eval_tree_dirc->Branch("phx", &phx_dirc, "phx/F");
+  _eval_tree_dirc->Branch("phy", &phy_dirc, "phy/F");
+  _eval_tree_dirc->Branch("phz", &phz_dirc, "phz/F");
+  _eval_tree_dirc->Branch("dca", &dca_dirc, "dca/F");
+
   return Fun4AllReturnCodes::EVENT_OK;
 }
 
@@ -139,6 +168,7 @@ int PHG4TrackFastSimEval::process_event(PHCompositeNode *topNode)
   //std::cout << "Filling trees" << std::endl;
   fill_track_tree(topNode);
   fill_vertex_tree(topNode);
+  fill_dirc_tree(topNode);
   //std::cout << "DONE" << std::endl;
 
   return Fun4AllReturnCodes::EVENT_OK;
@@ -154,6 +184,7 @@ int PHG4TrackFastSimEval::End(PHCompositeNode *topNode)
 
   _eval_tree_tracks->Write();
   _eval_tree_vertex->Write();
+  _eval_tree_dirc  ->Write();
 
   _h2d_Delta_mom_vs_truth_eta->Write();
   _h2d_Delta_mom_vs_truth_mom->Write();
@@ -372,6 +403,152 @@ void PHG4TrackFastSimEval::fill_vertex_tree(PHCompositeNode *topNode)
 }
 
 //----------------------------------------------------------------------------//
+//-- fill_dirc_tree():
+//--   Fill the trees with truth, track fit, and cluster information
+//----------------------------------------------------------------------------//
+void PHG4TrackFastSimEval::fill_dirc_tree(PHCompositeNode *topNode)
+{
+  // Make sure to reset all the TTree variables before trying to set them.
+
+  if (!_truth_container)
+  {
+    LogError("_truth_container not found!");
+    return;
+  }
+
+  if (!_trackmap)
+  {
+    LogError("_trackmap not found!");
+    return;
+  }
+  
+  if (!_dirc_hits)
+  {
+    LogError("_dirc_hits not found!");
+    return;
+  }
+
+  PHG4TruthInfoContainer::ConstRange range =
+      _truth_container->GetPrimaryParticleRange();
+  //std::cout << "A2" << std::endl;
+  for (PHG4TruthInfoContainer::ConstIterator truth_itr = range.first;
+       truth_itr != range.second; ++truth_itr)
+  {
+    reset_variables();
+    //std::cout << "A1" << std::endl;
+    event = _event;
+
+    PHG4Particle *g4particle = truth_itr->second;
+    if (!g4particle)
+    {
+      LogDebug("");
+      continue;
+    }
+    //std::cout << "B1" << std::endl;
+
+    SvtxTrack_FastSim *track = nullptr;
+
+    //std::cout << "TRACKmap size " << _trackmap->size() << std::endl;
+    for (SvtxTrackMap::ConstIter track_itr = _trackmap->begin();
+         track_itr != _trackmap->end();
+         track_itr++)
+    {
+      //std::cout << "TRACK * " << track_itr->first << std::endl;
+      SvtxTrack_FastSim *temp = dynamic_cast<SvtxTrack_FastSim *>(track_itr->second);
+      if (!temp)
+      {
+        std::cout << "ERROR CASTING PARTICLE!" << std::endl;
+        continue;
+      }
+      //std::cout << " PARTICLE!" << std::endl;
+
+      if ((temp->get_truth_track_id() - g4particle->get_track_id()) == 0)
+      {
+        track = temp;
+      }
+    }
+
+    //std::cout << "B2" << std::endl;
+    gtrackID = g4particle->get_track_id();
+    gflavor = g4particle->get_pid();
+
+    if (track)
+    {
+      //std::cout << "C1" << std::endl;
+      SvtxTrackState* state = nullptr;
+      for (SvtxTrack::ConstStateIter state_iter = track->begin_states();
+           state_iter != track->end_states();
+           ++state_iter)
+      {
+        SvtxTrackState* temp_state = state_iter->second;
+        if (!temp_state) continue;
+        if (temp_state->get_name() == "DIRC")
+          state = temp_state;
+      }
+      if (!state) continue;
+
+      PHG4Hit* hit = nullptr;
+      dca_dirc = -1;
+      PHG4HitContainer::ConstRange hit_range = _dirc_hits->getHits();
+      for (PHG4HitContainer::ConstIterator hit_iter = hit_range.first; hit_iter != hit_range.second; hit_iter++)
+      {
+        PHG4Hit* temp_hit = hit_iter->second;
+        if (!temp_hit)
+        {
+          LogDebug("");
+          continue;
+        }
+        if ((temp_hit->get_trkid() - g4particle->get_track_id()) == 0)
+        {
+          float ghx_dirc_tmp = temp_hit->get_avg_x();
+          float ghy_dirc_tmp = temp_hit->get_avg_y();
+          float ghz_dirc_tmp = temp_hit->get_avg_z();
+
+          float phx_dirc_tmp = state->get_x();
+          float phy_dirc_tmp = state->get_y();
+          float phz_dirc_tmp = state->get_z();
+          
+          float dca_dirc_tmp = (ghx_dirc_tmp -phx_dirc_tmp )*(ghx_dirc_tmp -phx_dirc_tmp ) + (ghy_dirc_tmp -phy_dirc_tmp )*(ghy_dirc_tmp -phy_dirc_tmp ) + (ghz_dirc_tmp -phz_dirc_tmp )*(ghz_dirc_tmp -phz_dirc_tmp );
+          if ((dca_dirc < 0) || (dca_dirc_tmp < dca_dirc)){
+            dca_dirc = dca_dirc_tmp;
+            hit = temp_hit;
+          }
+        }
+      }
+      if ( hit && state ) {
+        gpx_dirc = hit->get_px(0);
+        gpy_dirc = hit->get_py(0);
+        gpz_dirc = hit->get_pz(0);
+        ghx_dirc = hit->get_avg_x();
+        ghy_dirc = hit->get_avg_y();
+        ghz_dirc = hit->get_avg_z();
+        ght_dirc = hit->get_avg_t();
+
+        trackID = track->get_id();
+        charge = track->get_charge();
+        nhits = track->size_clusters();
+
+        px_dirc = state->get_px();
+        py_dirc = state->get_py();
+        pz_dirc = state->get_pz();
+        phx_dirc = state->get_x();
+        phy_dirc = state->get_y();
+        phz_dirc = state->get_z();
+
+        dca_dirc = TMath::Sqrt(dca_dirc);
+
+        _eval_tree_dirc->Fill();
+      }
+
+    }
+
+  }
+  //std::cout << "A3" << std::endl;
+
+  return;
+}
+
+//----------------------------------------------------------------------------//
 //-- reset_variables():
 //--   Reset all the tree variables to their default values.
 //--   Needs to be called at the start of every event
@@ -392,6 +569,14 @@ void PHG4TrackFastSimEval::reset_variables()
   gvz = NAN;
   gvt = NAN;
 
+  gpx_dirc = NAN;
+  gpy_dirc = NAN;
+  gpz_dirc = NAN;
+  ghx_dirc = NAN;
+  ghy_dirc = NAN;
+  ghz_dirc = NAN;
+  ght_dirc = NAN;
+
   //-- reco
   trackID = -9999;
   charge = -9999;
@@ -403,6 +588,14 @@ void PHG4TrackFastSimEval::reset_variables()
   pcay = NAN;
   pcaz = NAN;
   dca2d = NAN;
+
+  px_dirc  = NAN;
+  py_dirc  = NAN;
+  pz_dirc  = NAN;
+  phx_dirc = NAN;
+  phy_dirc = NAN;
+  phz_dirc = NAN;
+  dca_dirc = NAN;
 
   vx = NAN;
   vy = NAN;
@@ -449,6 +642,8 @@ int PHG4TrackFastSimEval::GetNodes(PHCompositeNode *topNode)
     cout << PHWHERE << "SvtxTrackMap node with name SvtxVertexMap not found on node tree. Will not build the vertex eval tree"
          << endl;
   }
+
+  _dirc_hits = findNode::getClass<PHG4HitContainer>(topNode, "G4HIT_AIRDIRC");
 
   return Fun4AllReturnCodes::EVENT_OK;
 }
