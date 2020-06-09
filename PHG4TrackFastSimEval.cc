@@ -485,6 +485,7 @@ void PHG4TrackFastSimEval::fill_dirc_tree(PHCompositeNode *topNode)
       {
         SvtxTrackState* temp_state = state_iter->second;
         if (!temp_state) continue;
+        // have to extrapolate to both directions of a track and select the one that has minimal dca to the real hit
         if (temp_state->get_name() == "DIRC")
           state[0] = temp_state;
         else if (temp_state->get_name() == "DIRCinv")
